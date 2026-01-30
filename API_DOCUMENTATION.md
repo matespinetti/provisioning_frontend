@@ -385,7 +385,109 @@ curl -X POST http://localhost:8000/api/auth/logout \
 
 ---
 
-### 3.2 Subscriber Management
+### 3.2 Audit Log Endpoints
+
+#### GET /api/v1/audit
+
+Retrieve paginated audit logs for the authenticated user.
+
+**Authentication Required:** Yes (JWT Bearer token)
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `skip` | integer | No | 0 | Number of records to skip for pagination |
+| `limit` | integer | No | 100 | Max records to return (max: 1000) |
+| `operation` | string | No | - | Filter by operation type |
+| `resource_type` | string | No | - | Filter by resource type (subscriber, request) |
+| `status` | string | No | - | Filter by status (success, failed) |
+| `resource_id` | string | No | - | Filter by resource ID (ICCID, request_id) |
+| `from_date` | ISO 8601 | No | - | Start date for filtering |
+| `to_date` | ISO 8601 | No | - | End date for filtering |
+| `sort_order` | string | No | desc | Sort direction (asc, desc) |
+
+**Operation Values:**
+- `CREATE` - Subscriber creation
+- `READ` - Subscriber read
+- `UPDATE_AOR` - AOR settings update
+- `UPDATE_STATE` - Subscriber state change
+- `UPDATE_APN` - APN settings update
+- `UPDATE_NETWORK_ACCESS_LIST` - Network access zones update
+- `UPDATE_CREDIT` - Credit settings update
+- `UPDATE_BLOCK_DATA_USAGE` - Data blocking change
+- `DELETE` - Subscriber deletion
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "user_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "username": "john_doe",
+      "operation": "CREATE",
+      "resource_type": "subscriber",
+      "resource_id": "89312400000001715969",
+      "status": "success",
+      "request_body": {
+        "iccid": "89312400000001715969",
+        "msisdn": "31658011998",
+        "aor": {
+          "domain_id": 84,
+          "auth_username": "+31658011998",
+          "auth_password": "[REDACTED]"
+        }
+      },
+      "response_status": "202",
+      "error_message": null,
+      "created_at": "2026-01-30T14:30:00Z"
+    }
+  ],
+  "total": 42,
+  "skip": 0,
+  "limit": 100
+}
+```
+
+**Example Requests:**
+
+```bash
+# Get latest 50 audit logs
+curl -X GET "http://localhost:8000/api/v1/audit?limit=50" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Get failed operations only
+curl -X GET "http://localhost:8000/api/v1/audit?status=failed" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Get CREATE operations for specific ICCID
+curl -X GET "http://localhost:8000/api/v1/audit?operation=CREATE&resource_id=89312400000001715969" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Get audit logs from last 7 days
+curl -X GET "http://localhost:8000/api/v1/audit?from_date=2026-01-23T00:00:00Z&to_date=2026-01-30T23:59:59Z" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Pagination: get next page
+curl -X GET "http://localhost:8000/api/v1/audit?skip=100&limit=100" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Security Notes:**
+- Users can only view their own audit logs
+- Sensitive fields (passwords, tokens, secrets) are automatically redacted from `request_body`
+- Original unredacted data remains in database for admin/debugging purposes
+
+**Performance Considerations:**
+- Date range filtering recommended for large audit log datasets
+- Maximum limit of 1000 records per request
+- Queries optimized using database indexes on: user_id, operation, resource_type, status, created_at
+
+---
+
+### 3.3 Subscriber Management
 
 **Endpoint summary (synchronous by default):**
 

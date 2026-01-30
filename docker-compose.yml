@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  provisioning_frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: "http://host.docker.internal:8000"
+    restart: unless-stopped
