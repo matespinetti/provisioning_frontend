@@ -11,6 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
 
 interface AuditFilterDefaults {
   resource_id?: string
@@ -38,6 +40,21 @@ export function AuditFilters({ defaults }: { defaults: AuditFilterDefaults }) {
   const [status, setStatus] = useState(defaults.status ?? "all")
   const [operation, setOperation] = useState(defaults.operation ?? "all")
   const [sortOrder, setSortOrder] = useState(defaults.sort_order ?? "desc")
+  const [fromDate, setFromDate] = useState<Date | undefined>(
+    defaults.from_date ? new Date(defaults.from_date) : undefined
+  )
+  const [toDate, setToDate] = useState<Date | undefined>(
+    defaults.to_date ? new Date(defaults.to_date) : undefined
+  )
+  const [fromTime, setFromTime] = useState(
+    defaults.from_date ? formatTime(new Date(defaults.from_date)) : ""
+  )
+  const [toTime, setToTime] = useState(
+    defaults.to_date ? formatTime(new Date(defaults.to_date)) : ""
+  )
+
+  const fromISO = fromDate ? applyTime(fromDate, fromTime).toISOString() : ""
+  const toISO = toDate ? applyTime(toDate, toTime).toISOString() : ""
 
   return (
     <form className="grid grid-cols-1 gap-3 md:grid-cols-12" method="get">
@@ -78,11 +95,47 @@ export function AuditFilters({ defaults }: { defaults: AuditFilterDefaults }) {
       </div>
       <div className="md:col-span-3">
         <label className="text-xs font-medium text-muted-foreground">From</label>
-        <Input type="datetime-local" name="from_date" defaultValue={defaults.from_date ?? ""} />
+        <div className="flex flex-col gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-full justify-start text-left font-normal">
+                {fromDate ? fromDate.toLocaleDateString() : "Pick date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar mode="single" selected={fromDate} onSelect={setFromDate} initialFocus />
+            </PopoverContent>
+          </Popover>
+          <Input
+            type="time"
+            value={fromTime}
+            onChange={(e) => setFromTime(e.target.value)}
+            disabled={!fromDate}
+          />
+          <input type="hidden" name="from_date" value={fromISO} />
+        </div>
       </div>
       <div className="md:col-span-3">
         <label className="text-xs font-medium text-muted-foreground">To</label>
-        <Input type="datetime-local" name="to_date" defaultValue={defaults.to_date ?? ""} />
+        <div className="flex flex-col gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-full justify-start text-left font-normal">
+                {toDate ? toDate.toLocaleDateString() : "Pick date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar mode="single" selected={toDate} onSelect={setToDate} initialFocus />
+            </PopoverContent>
+          </Popover>
+          <Input
+            type="time"
+            value={toTime}
+            onChange={(e) => setToTime(e.target.value)}
+            disabled={!toDate}
+          />
+          <input type="hidden" name="to_date" value={toISO} />
+        </div>
       </div>
       <div className="md:col-span-4">
         <label className="text-xs font-medium text-muted-foreground">Resource type</label>
@@ -109,4 +162,23 @@ export function AuditFilters({ defaults }: { defaults: AuditFilterDefaults }) {
       </div>
     </form>
   )
+}
+
+function formatTime(date: Date) {
+  const hours = String(date.getHours()).padStart(2, "0")
+  const minutes = String(date.getMinutes()).padStart(2, "0")
+  return `${hours}:${minutes}`
+}
+
+function applyTime(date: Date, timeValue: string) {
+  const [hours, minutes] = timeValue.split(":").map((value) => Number(value))
+  if (Number.isFinite(hours) && Number.isFinite(minutes)) {
+    const next = new Date(date)
+    next.setHours(hours)
+    next.setMinutes(minutes)
+    next.setSeconds(0)
+    next.setMilliseconds(0)
+    return next
+  }
+  return date
 }
