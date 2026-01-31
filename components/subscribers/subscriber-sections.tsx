@@ -131,10 +131,9 @@ function getSpeedPresetKey(speedDown?: number | string, speedUp?: number | strin
 
 interface Props {
   subscriber: Subscriber
-  id: string
 }
 
-export function SubscriberSections({ subscriber, id }: Props) {
+export function SubscriberSections({ subscriber }: Props) {
   const router = useRouter()
   const { aor, apn, contract, credit, network_access_list, block_data_usage } = subscriber
 
@@ -185,7 +184,7 @@ export function SubscriberSections({ subscriber, id }: Props) {
     setStateError(null)
     startStateTransition(async () => {
       try {
-        await patchState(id, { subscriber_state: stateValue })
+        await patchState(subscriber.iccid, { subscriber_state: stateValue })
         setStateEditing(false)
         router.refresh()
         toast.success('Subscriber state updated')
@@ -201,7 +200,7 @@ export function SubscriberSections({ subscriber, id }: Props) {
     setZonesError(null)
     startZonesTransition(async () => {
       try {
-        await patchNetworkAccess(id, zones)
+        await patchNetworkAccess(subscriber.iccid, zones)
         setZonesEditing(false)
         router.refresh()
         toast.success('Network access list updated')
@@ -227,7 +226,7 @@ export function SubscriberSections({ subscriber, id }: Props) {
         return
       }
       try {
-        await patchApn(id, {
+        await patchApn(subscriber.iccid, {
           name: apnForm.name,
           speed_up: speedUp as any,
           speed_down: speedDown as any,
@@ -253,7 +252,7 @@ export function SubscriberSections({ subscriber, id }: Props) {
           toast.error('Domain ID must be a number')
           return
         }
-        await patchAor(id, {
+        await patchAor(subscriber.iccid, {
           domain_id: domainId,
           auth_username: aorForm.auth_username,
           auth_password: aorForm.auth_password,
@@ -280,7 +279,7 @@ export function SubscriberSections({ subscriber, id }: Props) {
           toast.error('Max credit must be a number')
           return
         }
-        await patchCredit(id, {
+        await patchCredit(subscriber.iccid, {
           max_credit: maxCredit,
         })
         setCreditEditing(false)
@@ -305,7 +304,7 @@ export function SubscriberSections({ subscriber, id }: Props) {
             return
           }
         }
-        await patchBlockDataUsage(id, {
+        await patchBlockDataUsage(subscriber.iccid, {
           enabled: blockForm.enabled,
           block_until: blockForm.enabled && blockForm.block_until ? blockForm.block_until.toISOString() : null,
           scope: blockForm.enabled && blockForm.scope ? (blockForm.scope as 'outside_eu_regulation' | 'all') : null,

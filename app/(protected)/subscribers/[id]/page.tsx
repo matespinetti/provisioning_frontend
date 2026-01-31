@@ -90,7 +90,7 @@ export default async function SubscriberDetailPage({ params }: Props) {
         </CardContent>
       </Card>
 
-      <SubscriberSections subscriber={subscriber} id={decodedId} />
+      <SubscriberSections subscriber={subscriber} />
 
       <div className="flex justify-end">
         <Button asChild variant="outline">

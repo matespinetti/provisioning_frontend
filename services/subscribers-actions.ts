@@ -44,7 +44,9 @@ async function authorizedFetch(path: string, options: RequestInit) {
       (detail as any)?.msg ||
       (detail as any)?.detail?.reason ||
       (detail as any)?.detail?.message ||
-      (detail as any)?.detail ||
+      (typeof (detail as any)?.detail === 'string'
+        ? (detail as any)?.detail
+        : JSON.stringify((detail as any)?.detail || detail)) ||
       res.statusText
     throw new Error(message || 'Request failed')
   }
