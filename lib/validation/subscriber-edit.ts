@@ -5,7 +5,7 @@ export const subscriberIdParamSchema = z.union([iccidSchema, msisdnSchema])
 
 export const apnUpdateSchema = z.object({
   name: z
-    .string({ required_error: 'APN name is required' })
+    .string({ message: 'APN name is required' })
     .regex(/^([a-z0-9\-.]){2,43}\.[a-z]{2,10}$/, 'Invalid APN name'),
   speed_up: z.union([z.literal('max'), z.number().int().nonnegative()]),
   speed_down: z.union([z.literal('max'), z.number().int().nonnegative()]),

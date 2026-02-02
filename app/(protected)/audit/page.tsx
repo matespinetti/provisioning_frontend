@@ -58,7 +58,7 @@ export default async function AuditPage({
     }
     Object.entries({ ...base, ...overrides }).forEach(([key, value]) => {
       if (value && value !== "all") {
-        params.set(key, value)
+        params.set(key, String(value))
       }
     })
     return params.toString()
