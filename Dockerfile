@@ -26,4 +26,14 @@ COPY --from=builder /app/.next/static ./.next/static
 
 USER nextjs
 EXPOSE 3000
+
+# Container metadata labels
+LABEL org.opencontainers.image.title="Sona Provisioning Frontend"
+LABEL org.opencontainers.image.description="Next.js frontend for Sona provisioning system"
+LABEL org.opencontainers.image.vendor="Sona"
+
+# Health check using wget (lightweight for Alpine)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost:3000/ || exit 1
+
 CMD ["node", "server.js"]

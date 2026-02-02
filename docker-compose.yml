@@ -1,13 +1,28 @@
 version: "3.9"
 
 services:
-  provisioning_frontend:
+  provisioning-frontend:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: sona-provisioning-frontend
     ports:
-      - "3000:3000"
+      - "${PROVISIONING_FRONTEND_PORT:-3000}:3000"
+    env_file:
+      - .env.production
     environment:
-      NODE_ENV: production
-      NEXT_PUBLIC_API_URL: "http://host.docker.internal:8000"
+      - NODE_ENV=production
     restart: unless-stopped
+    networks:
+      - sona-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  sona-network:
+    external: true
+    name: sona-network
