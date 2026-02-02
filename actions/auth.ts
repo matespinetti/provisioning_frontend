@@ -6,6 +6,9 @@ import type { LoginResponse, RefreshResponse } from '@/types/auth'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+// Cookie security settings - set to false if running HTTP without SSL
+const COOKIES_SECURE = process.env.NEXT_PUBLIC_COOKIES_SECURE === 'true'
+
 /**
  * Login action - Authenticate user and set httpOnly cookies
  */
@@ -34,7 +37,7 @@ export async function loginAction(formData: FormData) {
 
     cookieStore.set('access_token', data.access_token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: COOKIES_SECURE,
       sameSite: 'lax',
       maxAge: 3600, // 1 hour
       path: '/',
@@ -42,7 +45,7 @@ export async function loginAction(formData: FormData) {
 
     cookieStore.set('refresh_token', data.refresh_token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: COOKIES_SECURE,
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60, // 7 days
       path: '/',
@@ -50,7 +53,7 @@ export async function loginAction(formData: FormData) {
 
     // Set session expiry cookie (NOT httpOnly - needs JS access for client-side checks)
     cookieStore.set('session_expires_at', String(Date.now() + 3600 * 1000), {
-      secure: process.env.NODE_ENV === 'production',
+      secure: COOKIES_SECURE,
       sameSite: 'lax',
       maxAge: 3600, // 1 hour
       path: '/',
@@ -58,7 +61,7 @@ export async function loginAction(formData: FormData) {
 
     // Store user data in another cookie for easy access (optional)
     cookieStore.set('user_data', JSON.stringify(data.user), {
-      secure: process.env.NODE_ENV === 'production',
+      secure: COOKIES_SECURE,
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60, // 7 days
       path: '/',
@@ -108,7 +111,7 @@ export async function refreshAction() {
     // Update access token cookie
     cookieStore.set('access_token', data.access_token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: COOKIES_SECURE,
       sameSite: 'lax',
       maxAge: 3600, // 1 hour
       path: '/',
@@ -116,7 +119,7 @@ export async function refreshAction() {
 
     // Update session expiry cookie
     cookieStore.set('session_expires_at', String(Date.now() + 3600 * 1000), {
-      secure: process.env.NODE_ENV === 'production',
+      secure: COOKIES_SECURE,
       sameSite: 'lax',
       maxAge: 3600, // 1 hour
       path: '/',
