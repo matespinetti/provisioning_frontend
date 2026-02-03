@@ -82,6 +82,25 @@ function sameDate(a?: Date, b?: Date) {
   return a.getTime() === b.getTime()
 }
 
+function toRFC3339(date: Date): string {
+  // Format date to RFC3339 with timezone offset (e.g., 2026-02-03T14:16:52+01:00)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const year = date.getFullYear()
+  const month = pad(date.getMonth() + 1)
+  const day = pad(date.getDate())
+  const hours = pad(date.getHours())
+  const minutes = pad(date.getMinutes())
+  const seconds = pad(date.getSeconds())
+
+  // Get timezone offset in +HH:MM or -HH:MM format
+  const tzOffset = -date.getTimezoneOffset()
+  const tzSign = tzOffset >= 0 ? '+' : '-'
+  const tzHours = pad(Math.floor(Math.abs(tzOffset) / 60))
+  const tzMinutes = pad(Math.abs(tzOffset) % 60)
+
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${tzSign}${tzHours}:${tzMinutes}`
+}
+
 const contractPlans = [
   { key: 'c0', label: 'Number Parking Service', service_package: 1200000, service_profile: 0, duration: 0 },
   { key: 'c1', label: 'Pay As You Go + usage data tier', service_package: 1200201, service_profile: 7, duration: 0 },
@@ -306,7 +325,7 @@ export function SubscriberSections({ subscriber }: Props) {
         }
         await patchBlockDataUsage(subscriber.iccid, {
           enabled: blockForm.enabled,
-          block_until: blockForm.enabled && blockForm.block_until ? blockForm.block_until.toISOString() : null,
+          block_until: blockForm.enabled && blockForm.block_until ? toRFC3339(blockForm.block_until) : null,
           scope: blockForm.enabled && blockForm.scope ? (blockForm.scope as 'outside_eu_regulation' | 'all') : null,
         })
         setBlockEditing(false)
