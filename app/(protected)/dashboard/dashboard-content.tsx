@@ -43,7 +43,7 @@ export function DashboardContent() {
         </Button>
       </div>
 
-      <Card className="border-slate-200/80 bg-white/80 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+      <Card className="glass shadow-sm">
         <CardContent className="grid gap-4 p-6 md:grid-cols-[1.2fr_1fr]">
           <div className="space-y-3">
             <div>

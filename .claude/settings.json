@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__serena__check_onboarding_performed",
+      "Read(//home/matespinetti/projects/sona2/frontend/**)"
+    ]
+  }
+}
