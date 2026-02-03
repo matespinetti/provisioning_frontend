@@ -180,8 +180,12 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-image: 
+      radial-gradient(circle at 0% 0%, oklch(0.85 0.15 240 / 0.8), transparent 60%),
+      radial-gradient(circle at 100% 100%, oklch(0.85 0.15 280 / 0.8), transparent 60%);
+    background-attachment: fixed;
   }
   .glass {
-    @apply bg-white/70 backdrop-blur-md border border-white/20 dark:bg-slate-900/60 dark:border-white/10;
+    @apply bg-white/60 backdrop-blur-xl border border-white/20 dark:bg-slate-900/60 dark:border-white/10;
   }
 }

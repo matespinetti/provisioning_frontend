@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { UserMenu } from './user-menu'
 import { logoutAction } from '@/actions/auth'
+import { ModeToggle } from '@/components/mode-toggle'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Home },
@@ -75,6 +76,7 @@ export function MainNav({ username }: { username?: string | null }) {
         </div>
 
         <div className="hidden items-center gap-3 md:flex">
+          <ModeToggle />
           <Separator orientation="vertical" className="h-6" />
           <UserMenu username={username} />
           <Button
@@ -103,6 +105,10 @@ export function MainNav({ username }: { username?: string | null }) {
                 <UserMenu username={username} minimal />
                 <Separator />
                 <div className="flex flex-col gap-1">{renderLinks()}</div>
+                <div className="flex items-center justify-between px-2">
+                    <span className="text-sm text-muted-foreground">Theme</span>
+                    <ModeToggle />
+                </div>
                 <Button
                   variant="ghost"
                   className="w-full justify-start gap-2 text-muted-foreground"
