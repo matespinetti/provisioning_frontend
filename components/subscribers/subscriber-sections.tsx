@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useOptimistic } from 'react'
 import { useRouter } from 'next/navigation'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { SectionField } from './section-field'
@@ -30,11 +30,18 @@ import {
   patchBlockDataUsage,
 } from '@/services/subscribers-actions'
 import { NetworkAccessList } from '@/types/subscriber'
+import {
+  parseRFC3339WithTimezone,
+  toRFC3339WithTimezone,
+  formatDateTimeWithTimezone,
+  formatDateTimeSimple,
+} from '@/lib/utils/datetime'
 
 function formatDate(dateString?: string | null) {
   if (!dateString) return '—'
-  const date = new Date(dateString)
-  return date.toLocaleString()
+  const parsed = parseRFC3339WithTimezone(dateString)
+  if (!parsed) return '—'
+  return formatDateTimeWithTimezone(parsed.date, parsed.timezone)
 }
 
 function parseSpeed(value: string) {
@@ -50,55 +57,92 @@ function normalizeSpeed(value: string) {
   return Number.isFinite(num) ? String(num) : value
 }
 
-function toDateOrUndefined(value?: string | null) {
-  if (!value) return undefined
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? undefined : date
-}
+// Helper to format time from date object
+function formatTime(dateWithTz?: { date: Date; timezone: string }) {
+  if (!dateWithTz) return ''
 
-function formatTime(date?: Date) {
-  if (!date) return ''
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${hours}:${minutes}`
-}
+  // Get the time in the API's timezone (not browser's local timezone)
+  const rfcString = toRFC3339WithTimezone(dateWithTz.date, dateWithTz.timezone)
+  const timeMatch = rfcString.match(/T(\d{2}):(\d{2})/)
 
-function setTimeOnDate(date: Date, timeValue: string) {
-  const [hours, minutes] = timeValue.split(':').map((value) => Number(value))
-  if (Number.isFinite(hours) && Number.isFinite(minutes)) {
-    const next = new Date(date)
-    next.setHours(hours)
-    next.setMinutes(minutes)
-    next.setSeconds(0)
-    next.setMilliseconds(0)
-    return next
+  if (timeMatch) {
+    return `${timeMatch[1]}:${timeMatch[2]}`
   }
-  return date
+
+  return ''
 }
 
-function sameDate(a?: Date, b?: Date) {
+// Helper to update time on a date object while preserving timezone
+function setTimeOnDate(dateWithTz: { date: Date; timezone: string }, timeValue: string): { date: Date; timezone: string } {
+  const [hours, minutes] = timeValue.split(':').map((value) => Number(value))
+
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return dateWithTz
+  }
+
+  // Parse the current RFC3339 string to get the date in the API's timezone
+  const rfcString = toRFC3339WithTimezone(dateWithTz.date, dateWithTz.timezone)
+  const dateMatch = rfcString.match(/^(\d{4})-(\d{2})-(\d{2})/)
+
+  if (!dateMatch) {
+    return dateWithTz
+  }
+
+  // Reconstruct the RFC3339 string with new time
+  const newRfcString = `${dateMatch[0]}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00${dateWithTz.timezone}`
+
+  // Parse it back to get the new Date object
+  const newDate = new Date(newRfcString)
+
+  return {
+    date: newDate,
+    timezone: dateWithTz.timezone
+  }
+}
+
+// Extract hours from dateWithTz (for Select component)
+function getHours(dateWithTz?: { date: Date; timezone: string }) {
+  if (!dateWithTz) return ''
+  const rfcString = toRFC3339WithTimezone(dateWithTz.date, dateWithTz.timezone)
+  const match = rfcString.match(/T(\d{2}):/)
+  return match ? match[1] : ''
+}
+
+// Extract minutes from dateWithTz (for Select component)
+function getMinutes(dateWithTz?: { date: Date; timezone: string }) {
+  if (!dateWithTz) return ''
+  const rfcString = toRFC3339WithTimezone(dateWithTz.date, dateWithTz.timezone)
+  const match = rfcString.match(/T\d{2}:(\d{2})/)
+  return match ? match[1] : ''
+}
+
+// Set hours on dateWithTz
+function setHours(dateWithTz: { date: Date; timezone: string } | undefined, hours: string): { date: Date; timezone: string } | undefined {
+  if (!dateWithTz) return undefined
+  const minutes = getMinutes(dateWithTz)
+  return setTimeOnDate(dateWithTz, `${hours}:${minutes}`)
+}
+
+// Set minutes on dateWithTz
+function setMinutes(dateWithTz: { date: Date; timezone: string } | undefined, minutes: string): { date: Date; timezone: string } | undefined {
+  if (!dateWithTz) return undefined
+  const hours = getHours(dateWithTz)
+  return setTimeOnDate(dateWithTz, `${hours}:${minutes}`)
+}
+
+// Compare two date objects with timezone
+function sameDateWithTimezone(
+  a?: { date: Date; timezone: string },
+  b?: { date: Date; timezone: string }
+) {
   if (!a && !b) return true
   if (!a || !b) return false
-  return a.getTime() === b.getTime()
-}
 
-function toRFC3339(date: Date): string {
-  // Format date to RFC3339 with timezone offset (e.g., 2026-02-03T14:16:52+01:00)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const year = date.getFullYear()
-  const month = pad(date.getMonth() + 1)
-  const day = pad(date.getDate())
-  const hours = pad(date.getHours())
-  const minutes = pad(date.getMinutes())
-  const seconds = pad(date.getSeconds())
+  // Compare the RFC3339 strings
+  const aString = toRFC3339WithTimezone(a.date, a.timezone)
+  const bString = toRFC3339WithTimezone(b.date, b.timezone)
 
-  // Get timezone offset in +HH:MM or -HH:MM format
-  const tzOffset = -date.getTimezoneOffset()
-  const tzSign = tzOffset >= 0 ? '+' : '-'
-  const tzHours = pad(Math.floor(Math.abs(tzOffset) / 60))
-  const tzMinutes = pad(Math.abs(tzOffset) % 60)
-
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${tzSign}${tzHours}:${tzMinutes}`
+  return aString === bString
 }
 
 const contractPlans = [
@@ -154,9 +198,20 @@ interface Props {
 
 export function SubscriberSections({ subscriber }: Props) {
   const router = useRouter()
-  const { aor, apn, contract, credit, network_access_list, block_data_usage } = subscriber
 
-  const [stateValue, setStateValue] = useState(subscriber.subscriber_state)
+  // Optimistic state: updates immediately while server action is in progress
+  // Automatically syncs with subscriber prop when it changes (no useEffect needed!)
+  const [optimisticSubscriber, updateOptimisticSubscriber] = useOptimistic(
+    subscriber,
+    (currentState, optimisticUpdate: Partial<Subscriber>) => ({
+      ...currentState,
+      ...optimisticUpdate
+    })
+  )
+
+  const { aor, apn, contract, credit, network_access_list, block_data_usage } = optimisticSubscriber
+
+  const [stateValue, setStateValue] = useState(optimisticSubscriber.subscriber_state)
   const [stateEditing, setStateEditing] = useState(false)
   const [zones, setZones] = useState<NetworkAccessList>(network_access_list)
   const [zonesEditing, setZonesEditing] = useState(false)
@@ -179,7 +234,7 @@ export function SubscriberSections({ subscriber }: Props) {
   })
   const [blockForm, setBlockForm] = useState({
     enabled: block_data_usage.enabled,
-    block_until: toDateOrUndefined(block_data_usage.block_until),
+    block_until: parseRFC3339WithTimezone(block_data_usage.block_until),
     scope: block_data_usage.scope ?? '',
   })
   const [statePending, startStateTransition] = useTransition()
@@ -202,12 +257,20 @@ export function SubscriberSections({ subscriber }: Props) {
   const handleStateSave = () => {
     setStateError(null)
     startStateTransition(async () => {
+      // Store previous value for rollback
+      const previousValue = optimisticSubscriber.subscriber_state
+
       try {
+        // Optimistic update: update UI immediately
+        updateOptimisticSubscriber({ subscriber_state: stateValue })
+
         await patchState(subscriber.iccid, { subscriber_state: stateValue })
         setStateEditing(false)
         router.refresh()
         toast.success('Subscriber state updated')
       } catch (err) {
+        // Rollback optimistic update on error
+        updateOptimisticSubscriber({ subscriber_state: previousValue })
         const message = (err as Error).message || 'Could not save state'
         setStateError(message)
         toast.error(message)
@@ -218,12 +281,20 @@ export function SubscriberSections({ subscriber }: Props) {
   const handleZonesSave = () => {
     setZonesError(null)
     startZonesTransition(async () => {
+      // Store previous value for rollback
+      const previousZones = optimisticSubscriber.network_access_list
+
       try {
+        // Optimistic update
+        updateOptimisticSubscriber({ network_access_list: zones })
+
         await patchNetworkAccess(subscriber.iccid, zones)
         setZonesEditing(false)
         router.refresh()
         toast.success('Network access list updated')
       } catch (err) {
+        // Rollback on error
+        updateOptimisticSubscriber({ network_access_list: previousZones })
         const message = (err as Error).message || 'Could not save zones'
         setZonesError(message)
         toast.error(message)
@@ -244,7 +315,21 @@ export function SubscriberSections({ subscriber }: Props) {
         setApnError('Speed down must be a number or "max"')
         return
       }
+
+      // Store previous value for rollback
+      const previousApn = optimisticSubscriber.apn
+
       try {
+        // Optimistic update
+        updateOptimisticSubscriber({
+          apn: optimisticSubscriber.apn ? {
+            ...optimisticSubscriber.apn,
+            name: apnForm.name,
+            speed_up: speedUp as any,
+            speed_down: speedDown as any,
+          } : null
+        })
+
         await patchApn(subscriber.iccid, {
           name: apnForm.name,
           speed_up: speedUp as any,
@@ -254,6 +339,8 @@ export function SubscriberSections({ subscriber }: Props) {
         router.refresh()
         toast.success('APN settings updated')
       } catch (err) {
+        // Rollback on error
+        updateOptimisticSubscriber({ apn: previousApn })
         const message = (err as Error).message || 'Could not save APN'
         setApnError(message)
         toast.error(message)
@@ -264,13 +351,27 @@ export function SubscriberSections({ subscriber }: Props) {
   const handleAorSave = () => {
     setAorError(null)
     startAorTransition(async () => {
+      const domainId = Number(aorForm.domain_id)
+      if (!Number.isFinite(domainId)) {
+        setAorError('Domain ID must be a number')
+        toast.error('Domain ID must be a number')
+        return
+      }
+
+      // Store previous value for rollback
+      const previousAor = optimisticSubscriber.aor
+
       try {
-        const domainId = Number(aorForm.domain_id)
-        if (!Number.isFinite(domainId)) {
-          setAorError('Domain ID must be a number')
-          toast.error('Domain ID must be a number')
-          return
-        }
+        // Optimistic update
+        updateOptimisticSubscriber({
+          aor: {
+            ...optimisticSubscriber.aor,
+            domain_id: domainId,
+            auth_username: aorForm.auth_username,
+            auth_password: aorForm.auth_password,
+          }
+        })
+
         await patchAor(subscriber.iccid, {
           domain_id: domainId,
           auth_username: aorForm.auth_username,
@@ -281,6 +382,8 @@ export function SubscriberSections({ subscriber }: Props) {
         router.refresh()
         toast.success('AOR settings updated')
       } catch (err) {
+        // Rollback on error
+        updateOptimisticSubscriber({ aor: previousAor })
         const message = (err as Error).message || 'Could not save AOR'
         setAorError(message)
         toast.error(message)
@@ -291,13 +394,25 @@ export function SubscriberSections({ subscriber }: Props) {
   const handleCreditSave = () => {
     setCreditError(null)
     startCreditTransition(async () => {
+      const maxCredit = Number(creditForm.max_credit)
+      if (!Number.isFinite(maxCredit)) {
+        setCreditError('Max credit must be a number')
+        toast.error('Max credit must be a number')
+        return
+      }
+
+      // Store previous value for rollback
+      const previousCredit = optimisticSubscriber.credit
+
       try {
-        const maxCredit = Number(creditForm.max_credit)
-        if (!Number.isFinite(maxCredit)) {
-          setCreditError('Max credit must be a number')
-          toast.error('Max credit must be a number')
-          return
-        }
+        // Optimistic update
+        updateOptimisticSubscriber({
+          credit: {
+            ...optimisticSubscriber.credit,
+            max_credit: maxCredit
+          }
+        })
+
         await patchCredit(subscriber.iccid, {
           max_credit: maxCredit,
         })
@@ -305,6 +420,8 @@ export function SubscriberSections({ subscriber }: Props) {
         router.refresh()
         toast.success('Credit limit updated')
       } catch (err) {
+        // Rollback on error
+        updateOptimisticSubscriber({ credit: previousCredit })
         const message = (err as Error).message || 'Could not save credit'
         setCreditError(message)
         toast.error(message)
@@ -315,23 +432,42 @@ export function SubscriberSections({ subscriber }: Props) {
   const handleBlockSave = () => {
     setBlockError(null)
     startBlockTransition(async () => {
-      try {
-        if (blockForm.enabled) {
-          if (blockForm.scope && !['outside_eu_regulation', 'all'].includes(blockForm.scope)) {
-            setBlockError('Scope must be outside_eu_regulation or all')
-            toast.error('Invalid scope')
-            return
-          }
+      if (blockForm.enabled) {
+        // Validate scope is set when enabled
+        if (!blockForm.scope || blockForm.scope === 'none') {
+          setBlockError('Scope is required when blocking is enabled')
+          toast.error('Please select a scope')
+          return
         }
-        await patchBlockDataUsage(subscriber.iccid, {
-          enabled: blockForm.enabled,
-          block_until: blockForm.enabled && blockForm.block_until ? toRFC3339(blockForm.block_until) : null,
-          scope: blockForm.enabled && blockForm.scope ? (blockForm.scope as 'outside_eu_regulation' | 'all') : null,
-        })
+        if (!['outside_eu_regulation', 'all'].includes(blockForm.scope)) {
+          setBlockError('Scope must be outside_eu_regulation or all')
+          toast.error('Invalid scope')
+          return
+        }
+      }
+
+      // Store previous value for rollback
+      const previousBlockData = optimisticSubscriber.block_data_usage
+
+      const newBlockData = {
+        enabled: blockForm.enabled,
+        block_until: blockForm.enabled && blockForm.block_until
+          ? toRFC3339WithTimezone(blockForm.block_until.date, blockForm.block_until.timezone)
+          : null,
+        scope: blockForm.enabled && blockForm.scope ? (blockForm.scope as 'outside_eu_regulation' | 'all') : null,
+      }
+
+      try {
+        // Optimistic update
+        updateOptimisticSubscriber({ block_data_usage: newBlockData })
+
+        await patchBlockDataUsage(subscriber.iccid, newBlockData)
         setBlockEditing(false)
         router.refresh()
         toast.success('Data block settings updated')
       } catch (err) {
+        // Rollback on error
+        updateOptimisticSubscriber({ block_data_usage: previousBlockData })
         const message = (err as Error).message || 'Could not save block settings'
         setBlockError(message)
         toast.error(message)
@@ -382,7 +518,7 @@ export function SubscriberSections({ subscriber }: Props) {
   const resetBlock = () => {
     setBlockForm({
       enabled: block_data_usage.enabled,
-      block_until: toDateOrUndefined(block_data_usage.block_until),
+      block_until: parseRFC3339WithTimezone(block_data_usage.block_until),
       scope: block_data_usage.scope ?? '',
     })
     setBlockEditing(false)
@@ -391,7 +527,7 @@ export function SubscriberSections({ subscriber }: Props) {
 
   const zoneEntries = Object.entries(zones)
 
-  const stateChanged = stateValue !== subscriber.subscriber_state
+  const stateChanged = stateValue !== optimisticSubscriber.subscriber_state
   const apnChanged =
     normalizeSpeed(apnForm.speed_up) !== normalizeSpeed(apn?.speed_up?.toString() ?? '') ||
     normalizeSpeed(apnForm.speed_down) !== normalizeSpeed(apn?.speed_down?.toString() ?? '') ||
@@ -407,7 +543,7 @@ export function SubscriberSections({ subscriber }: Props) {
   const blockChanged =
     blockForm.enabled !== block_data_usage.enabled ||
     (blockForm.scope || '') !== (block_data_usage.scope ?? '') ||
-    !sameDate(blockForm.block_until, toDateOrUndefined(block_data_usage.block_until))
+    !sameDateWithTimezone(blockForm.block_until, parseRFC3339WithTimezone(block_data_usage.block_until))
 
   return (
     <Accordion type="multiple" defaultValue={['basic', 'aor', 'apn', 'contract', 'credit', 'zones']} className="space-y-4">
@@ -428,8 +564,8 @@ export function SubscriberSections({ subscriber }: Props) {
               </p>
               {!stateEditing ? (
                 <div className="flex flex-wrap items-center gap-3">
-                  <Badge variant={subscriber.subscriber_state ? 'success' : 'muted'}>
-                    {subscriber.subscriber_state ? 'Active' : 'Inactive'}
+                  <Badge variant={optimisticSubscriber.subscriber_state ? 'success' : 'muted'}>
+                    {optimisticSubscriber.subscriber_state ? 'Active' : 'Inactive'}
                   </Badge>
                   <Button size="sm" variant="outline" onClick={() => setStateEditing(true)}>
                     Edit
@@ -533,44 +669,91 @@ export function SubscriberSections({ subscriber }: Props) {
                       <Button
                         variant="outline"
                         className={`w-full justify-start text-left font-normal ${
-                          !sameDate(blockForm.block_until, toDateOrUndefined(block_data_usage.block_until))
+                          !sameDateWithTimezone(blockForm.block_until, parseRFC3339WithTimezone(block_data_usage.block_until))
                             ? 'border-amber-300 ring-1 ring-amber-200'
                             : ''
                         }`}
                         disabled={blockPending || !blockForm.enabled}
                       >
                         {blockForm.block_until
-                          ? blockForm.block_until.toLocaleString()
+                          ? formatDateTimeSimple(blockForm.block_until.date, blockForm.block_until.timezone)
                           : 'Pick a date'}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
                       <Calendar
                         mode="single"
-                        selected={blockForm.block_until}
-                        onSelect={(date) => setBlockForm((p) => ({ ...p, block_until: date ?? undefined }))}
+                        selected={blockForm.block_until?.date}
+                        onSelect={(date) => setBlockForm((p) => ({
+                          ...p,
+                          block_until: date
+                            ? {
+                                date,
+                                timezone: p.block_until?.timezone ?? '+01:00' // Preserve existing timezone or default to API timezone
+                              }
+                            : undefined
+                        }))}
                         initialFocus
                       />
                     </PopoverContent>
                   </Popover>
-                  <Input
-                    type="time"
-                    value={formatTime(blockForm.block_until)}
-                    onChange={(e) =>
-                      setBlockForm((p) => ({
-                        ...p,
-                        block_until: p.block_until
-                          ? setTimeOnDate(p.block_until, e.target.value)
-                          : undefined,
-                      }))
-                    }
-                    className={
-                      !sameDate(blockForm.block_until, toDateOrUndefined(block_data_usage.block_until))
-                        ? 'border-amber-300 ring-1 ring-amber-200'
-                        : undefined
-                    }
-                    disabled={!blockForm.block_until || blockPending || !blockForm.enabled}
-                  />
+                  <div className="flex gap-2 items-center">
+                    <Select
+                      value={getHours(blockForm.block_until)}
+                      onValueChange={(h) =>
+                        setBlockForm((p) => ({
+                          ...p,
+                          block_until: setHours(p.block_until, h)
+                        }))
+                      }
+                      disabled={!blockForm.block_until || blockPending || !blockForm.enabled}
+                    >
+                      <SelectTrigger
+                        className={`w-[100px] ${
+                          !sameDateWithTimezone(blockForm.block_until, parseRFC3339WithTimezone(block_data_usage.block_until))
+                            ? 'border-amber-300 ring-1 ring-amber-200'
+                            : ''
+                        }`}
+                      >
+                        <SelectValue placeholder="Hour" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 24 }, (_, i) => (
+                          <SelectItem key={i} value={String(i).padStart(2, '0')}>
+                            {String(i).padStart(2, '0')}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <span className="text-lg font-medium">:</span>
+                    <Select
+                      value={getMinutes(blockForm.block_until)}
+                      onValueChange={(m) =>
+                        setBlockForm((p) => ({
+                          ...p,
+                          block_until: setMinutes(p.block_until, m)
+                        }))
+                      }
+                      disabled={!blockForm.block_until || blockPending || !blockForm.enabled}
+                    >
+                      <SelectTrigger
+                        className={`w-[100px] ${
+                          !sameDateWithTimezone(blockForm.block_until, parseRFC3339WithTimezone(block_data_usage.block_until))
+                            ? 'border-amber-300 ring-1 ring-amber-200'
+                            : ''
+                        }`}
+                      >
+                        <SelectValue placeholder="Min" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 60 }, (_, i) => (
+                          <SelectItem key={i} value={String(i).padStart(2, '0')}>
+                            {String(i).padStart(2, '0')}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="flex gap-2">
                     <Button
                       size="sm"
